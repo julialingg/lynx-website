@@ -1,0 +1,406 @@
+diff --git a/src/components/go/example-preview/components/code.tsx b/src/components/go/example-preview/components/code.tsx
+index f7414c02..d71e863d 100644
+--- a/src/components/go/example-preview/components/code.tsx
++++ b/src/components/go/example-preview/components/code.tsx
+@@ -81,9 +81,30 @@ export const Code: FC<CodeProps> = ({
+   }, [highlight]);
+   return (
+     <div ref={containerRef}>
+-      <CodeBlockRuntime
++      <CodeBlockRuntime role="region" aria-label="Code example" tabIndex={0}
++        role="region"
++        aria-label={`Code snippet${language ? ` in ${language}` : ''}`}
++        role="region"
++        aria-label="Code snippet"
+         lang={language}
+         onRendered={() => {
++          // Fix accessibility: add valid ARIA role and accessible name to focusable <pre>
++          const preEl = containerRef.current?.querySelector('pre');
++          if (preEl) {
++            preEl.setAttribute('role', 'region');
++            preEl.setAttribute('aria-label', 'Code snippet');
++          }
++
++          // ensure pre element has an appropriate ARIA role
++          if (containerRef.current) {
++            const preElement = containerRef.current.querySelector('pre.shiki');
++            if (preElement) {
++              preElement.setAttribute('role', 'region');
++              if (!preElement.hasAttribute('aria-label')) {
++                preElement.setAttribute('aria-label', 'Code snippet');
++              }
++            }
++          }
+           scrollToFirstHighlightLine();
+         }}
+         code={val}
+@@ -93,10 +114,10 @@ export const Code: FC<CodeProps> = ({
+             transformerLineNumber(),
+             ...(highlightVal
+               ? [
+-                  transformerRuntimeMetaHighlight({
+-                    highlightVal,
+-                  }),
+-                ]
++                transformerRuntimeMetaHighlight({
++                  highlightVal,
++                }),
++              ]
+               : []),
+           ],
+         }}
+diff --git a/src/components/ui/select.tsx b/src/components/ui/select.tsx
+index a5afddf5..8f409dc3 100644
+--- a/src/components/ui/select.tsx
++++ b/src/components/ui/select.tsx
+@@ -1,34 +1,58 @@
+-import * as React from "react"
+-import * as SelectPrimitive from "@radix-ui/react-select"
+-import { Check, ChevronDown, ChevronUp } from "lucide-react"
++import * as React from "react";
++import { createContext, useContext, useId } from "react";
++import * as SelectPrimitive from "@radix-ui/react-select";
++import { Check, ChevronDown, ChevronUp } from "lucide-react";
+ 
+-import { cn } from "@/lib/utils"
++import { cn } from "@/lib/utils";
+ 
+-const Select = SelectPrimitive.Root
++const SelectContext = createContext<{ contentId: string } | null>(null);
+ 
+-const SelectGroup = SelectPrimitive.Group
++const Select = React.forwardRef<
++  React.ElementRef<typeof SelectPrimitive.Root>,
++  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Root>
++>(({ children, ...props }, ref) => {
++  const id = useId();
++  const contentId = `select-content-${id}`;
++  return (
++    <SelectContext.Provider value={{ contentId }}>
++      <SelectPrimitive.Root ref={ref} {...props}>
++        {children}
++      </SelectPrimitive.Root>
++    </SelectContext.Provider>
++  );
++});
++Select.displayName = SelectPrimitive.Root.displayName;
+ 
+-const SelectValue = SelectPrimitive.Value
++const SelectGroup = SelectPrimitive.Group;
++const SelectValue = SelectPrimitive.Value;
+ 
+ const SelectTrigger = React.forwardRef<
+   React.ElementRef<typeof SelectPrimitive.Trigger>,
+   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
+->(({ className, children, ...props }, ref) => (
+-  <SelectPrimitive.Trigger
+-    ref={ref}
+-    className={cn(
+-      "sh-flex sh-h-10 sh-w-full sh-items-center sh-justify-between sh-rounded-md sh-border sh-border-input sh-bg-background sh-px-3 sh-py-2 sh-text-sm sh-ring-offset-background placeholder:sh-text-muted-foreground focus:sh-outline-none focus:sh-ring-2 focus:sh-ring-ring focus:sh-ring-offset-2 disabled:sh-cursor-not-allowed disabled:sh-opacity-50 [&>span]:sh-line-clamp-1",
+-      className
+-    )}
+-    {...props}
+-  >
+-    {children}
+-    <SelectPrimitive.Icon asChild>
+-      <ChevronDown className="sh-h-4 sh-w-4 sh-opacity-50" />
+-    </SelectPrimitive.Icon>
+-  </SelectPrimitive.Trigger>
+-))
+-SelectTrigger.displayName = SelectPrimitive.Trigger.displayName
++>(({ className, children, ...props }, ref) => {
++  const context = useContext(SelectContext);
++  if (!context) {
++    throw new Error("Select components must be wrapped in <Select />");
++  }
++  const { contentId } = context;
++  return (
++    <SelectPrimitive.Trigger
++      ref={ref}
++      className={cn(
++        "sh-flex sh-h-10 sh-w-full sh-items-center sh-justify-between sh-rounded-md sh-border sh-border-input sh-bg-background sh-px-3 sh-py-2 sh-text-sm sh-ring-offset-background placeholder:sh-text-muted-foreground focus:sh-outline-none focus:sh-ring-2 focus:sh-ring-ring focus:sh-ring-offset-2 disabled:sh-cursor-not-allowed disabled:sh-opacity-50 [&>span]:sh-line-clamp-1",
++        className
++      )}
++      aria-controls={contentId}
++      {...props}
++    >
++      {children}
++      <SelectPrimitive.Icon asChild>
++        <ChevronDown className="sh-h-4 sh-w-4 sh-opacity-50" />
++      </SelectPrimitive.Icon>
++    </SelectPrimitive.Trigger>
++  );
++});
++SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;
+ 
+ const SelectScrollUpButton = React.forwardRef<
+   React.ElementRef<typeof SelectPrimitive.ScrollUpButton>,
+@@ -36,16 +60,13 @@ const SelectScrollUpButton = React.forwardRef<
+ >(({ className, ...props }, ref) => (
+   <SelectPrimitive.ScrollUpButton
+     ref={ref}
+-    className={cn(
+-      "sh-flex sh-cursor-default sh-items-center sh-justify-center sh-py-1",
+-      className
+-    )}
++    className={cn("sh-flex sh-cursor-default sh-items-center sh-justify-center sh-py-1", className)}
+     {...props}
+   >
+     <ChevronUp className="sh-h-4 sh-w-4" />
+   </SelectPrimitive.ScrollUpButton>
+-))
+-SelectScrollUpButton.displayName = SelectPrimitive.ScrollUpButton.displayName
++));
++SelectScrollUpButton.displayName = SelectPrimitive.ScrollUpButton.displayName;
+ 
+ const SelectScrollDownButton = React.forwardRef<
+   React.ElementRef<typeof SelectPrimitive.ScrollDownButton>,
+@@ -53,49 +74,53 @@ const SelectScrollDownButton = React.forwardRef<
+ >(({ className, ...props }, ref) => (
+   <SelectPrimitive.ScrollDownButton
+     ref={ref}
+-    className={cn(
+-      "sh-flex sh-cursor-default sh-items-center sh-justify-center sh-py-1",
+-      className
+-    )}
++    className={cn("sh-flex sh-cursor-default sh-items-center sh-justify-center sh-py-1", className)}
+     {...props}
+   >
+     <ChevronDown className="sh-h-4 sh-w-4" />
+   </SelectPrimitive.ScrollDownButton>
+-))
+-SelectScrollDownButton.displayName =
+-  SelectPrimitive.ScrollDownButton.displayName
++));
++SelectScrollDownButton.displayName = SelectPrimitive.ScrollDownButton.displayName;
+ 
+ const SelectContent = React.forwardRef<
+   React.ElementRef<typeof SelectPrimitive.Content>,
+   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
+->(({ className, children, position = "popper", ...props }, ref) => (
+-  <SelectPrimitive.Portal>
+-    <SelectPrimitive.Content
+-      ref={ref}
+-      className={cn(
+-        "sh-relative sh-z-50 sh-max-h-96 sh-min-w-[8rem] sh-overflow-hidden sh-rounded-md sh-border sh-bg-popover sh-text-popover-foreground sh-shadow-md data-[state=open]:sh-animate-in data-[state=closed]:sh-animate-out data-[state=closed]:sh-fade-out-0 data-[state=open]:sh-fade-in-0 data-[state=closed]:sh-zoom-out-95 data-[state=open]:sh-zoom-in-95 data-[side=bottom]:sh-slide-in-from-top-2 data-[side=left]:sh-slide-in-from-right-2 data-[side=right]:sh-slide-in-from-left-2 data-[side=top]:sh-slide-in-from-bottom-2",
+-        position === "popper" &&
+-          "data-[side=bottom]:sh-translate-y-1 data-[side=left]:sh--translate-x-1 data-[side=right]:sh-translate-x-1 data-[side=top]:sh--translate-y-1",
+-        className
+-      )}
+-      position={position}
+-      {...props}
+-    >
+-      <SelectScrollUpButton />
+-      <SelectPrimitive.Viewport
++>(({ className, children, position = "popper", ...props }, ref) => {
++  const context = useContext(SelectContext);
++  if (!context) {
++    throw new Error("Select components must be wrapped in <Select />");
++  }
++  const { contentId } = context;
++  return (
++    <SelectPrimitive.Portal>
++      <SelectPrimitive.Content
++        id={contentId}
++        ref={ref}
+         className={cn(
+-          "sh-p-1",
++          "sh-relative sh-z-50 sh-max-h-96 sh-min-w-[8rem] sh-overflow-hidden sh-rounded-md sh-border sh-bg-popover sh-text-popover-foreground sh-shadow-md data-[state=open]:sh-animate-in data-[state=closed]:sh-animate-out data-[state=closed]:sh-fade-out-0 data-[state=open]:sh-fade-in-0 data-[state=closed]:sh-zoom-out-95 data-[state=open]:sh-zoom-in-95 data-[side=bottom]:sh-slide-in-from-top-2 data-[side=left]:sh-slide-in-from-right-2 data-[side=right]:sh-slide-in-from-left-2 data-[side=top]:sh-slide-in-from-bottom-2",
+           position === "popper" &&
+-            "sh-h-[var(--radix-select-trigger-height)] sh-w-full sh-min-w-[var(--radix-select-trigger-width)]"
++          "data-[side=bottom]:sh-translate-y-1 data-[side=left]:sh--translate-x-1 data-[side=right]:sh-translate-x-1 data-[side=top]:sh--translate-y-1",
++          className
+         )}
++        position={position}
++        {...props}
+       >
+-        {children}
+-      </SelectPrimitive.Viewport>
+-      <SelectScrollDownButton />
+-    </SelectPrimitive.Content>
+-  </SelectPrimitive.Portal>
+-))
+-SelectContent.displayName = SelectPrimitive.Content.displayName
++        <SelectScrollUpButton />
++        <SelectPrimitive.Viewport
++          className={cn(
++            "sh-p-1",
++            position === "popper" &&
++            "sh-h-[var(--radix-select-trigger-height)] sh-w-full sh-min-w-[var(--radix-select-trigger-width)]"
++          )}
++        >
++          {children}
++        </SelectPrimitive.Viewport>
++        <SelectScrollDownButton />
++      </SelectPrimitive.Content>
++    </SelectPrimitive.Portal>
++  );
++});
++SelectContent.displayName = SelectPrimitive.Content.displayName;
+ 
+ const SelectLabel = React.forwardRef<
+   React.ElementRef<typeof SelectPrimitive.Label>,
+@@ -106,8 +131,8 @@ const SelectLabel = React.forwardRef<
+     className={cn("sh-py-1.5 sh-pl-8 sh-pr-2 sh-text-sm sh-font-semibold", className)}
+     {...props}
+   />
+-))
+-SelectLabel.displayName = SelectPrimitive.Label.displayName
++));
++SelectLabel.displayName = SelectPrimitive.Label.displayName;
+ 
+ const SelectItem = React.forwardRef<
+   React.ElementRef<typeof SelectPrimitive.Item>,
+@@ -126,11 +151,10 @@ const SelectItem = React.forwardRef<
+         <Check className="sh-h-4 sh-w-4" />
+       </SelectPrimitive.ItemIndicator>
+     </span>
+-
+     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+   </SelectPrimitive.Item>
+-))
+-SelectItem.displayName = SelectPrimitive.Item.displayName
++));
++SelectItem.displayName = SelectPrimitive.Item.displayName;
+ 
+ const SelectSeparator = React.forwardRef<
+   React.ElementRef<typeof SelectPrimitive.Separator>,
+@@ -141,8 +165,8 @@ const SelectSeparator = React.forwardRef<
+     className={cn("sh--mx-1 sh-my-1 sh-h-px sh-bg-muted", className)}
+     {...props}
+   />
+-))
+-SelectSeparator.displayName = SelectPrimitive.Separator.displayName
++));
++SelectSeparator.displayName = SelectPrimitive.Separator.displayName;
+ 
+ export {
+   Select,
+@@ -155,4 +179,4 @@ export {
+   SelectSeparator,
+   SelectScrollUpButton,
+   SelectScrollDownButton,
+-}
++};
+diff --git a/theme/AfterNavTitle.tsx b/theme/AfterNavTitle.tsx
+index 616e4a3a..65955b49 100644
+--- a/theme/AfterNavTitle.tsx
++++ b/theme/AfterNavTitle.tsx
+@@ -56,18 +56,23 @@ const Trigger = forwardRef<
+   HTMLButtonElement,
+   React.ButtonHTMLAttributes<HTMLButtonElement>
+ >((props, ref) => {
++  // Provide an accessible label for the trigger button
++  const { 'aria-label': ariaLabel, ...rest } = props;
+   return (
+     <button
+       ref={ref}
+       type="button"
++      aria-label={ariaLabel ?? 'Select subsite'}
+       className="sh-flex sh-items-center sh-rounded-md sh-px-1.5 sh-py-2 sh-text-sm sh-text-foreground hover:sh-bg-accent -sh-ml-1 -sh-mb-1"
+-      {...props}
++      {...rest}
+     >
+       <ChevronDown className="sh-h-4 sh-w-4" strokeWidth={1.5} />
+     </button>
+   );
+ });
+ 
++
++
+ Trigger.displayName = 'Trigger';
+ 
+ function Slash() {
+diff --git a/theme/index.tsx b/theme/index.tsx
+index ce13db5c..2e58a9bc 100644
+--- a/theme/index.tsx
++++ b/theme/index.tsx
+@@ -20,6 +20,30 @@ import { useBlogBtnDom } from './hooks/use-blog-btn-dom';
+ 
+ function Layout() {
+   const { pathname } = useLocation();
++  // Add unique aria-labels to navigation and sidebar for accessibility
++  useEffect(() => {
++    const navs = document.querySelectorAll('nav.rp-mt-1, nav.rp-pb-2');
++    navs.forEach((nav, idx) => {
++      if (!nav.hasAttribute('aria-label')) {
++        nav.setAttribute(
++          'aria-label',
++          idx === 0
++            ? 'Primary navigation'
++            : idx === 1
++              ? 'Table of contents'
++              : 'Sidebar navigation'
++        );
++      }
++    });
++  }, []);
++
++  useEffect(() => {
++    const sidebar = document.querySelector('aside.rspress-sidebar');
++    if (sidebar && !sidebar.hasAttribute('aria-label')) {
++      sidebar.setAttribute('aria-label', 'Sidebar');
++    }
++  }, []);
++
+ 
+   useEffect(() => {
+     const subsite = SUBSITES_CONFIG.find((s) => pathname.includes(s.value));
+@@ -29,6 +53,57 @@ function Layout() {
+     );
+   }, [pathname]);
+ 
++  // Remove focusability from hidden header-anchor links to satisfy aria_hidden_nontabbable
++  useEffect(() => {
++    const anchors = document.querySelectorAll('a.header-anchor[aria-hidden="true"]');
++    anchors.forEach(el => {
++      el.setAttribute('tabindex', '-1');
++      el.removeAttribute('href');
++    });
++  }, [pathname]);
++
++  // Accessibility Fix: Remove focusability from header anchors hidden from screen readers
++  useEffect(() => {
++    const anchors = document.querySelectorAll('a.header-anchor[aria-hidden="true"]');
++    anchors.forEach((el) => {
++      el.setAttribute('tabindex', '-1');
++      el.removeAttribute('href');
++    });
++  }, []);
++
++
++  // Disable focusable header anchors that are aria-hidden to satisfy accessibility rules
++  useEffect(() => {
++    const anchors = document.querySelectorAll<HTMLAnchorElement>('a.header-anchor[aria-hidden="true"]');
++    anchors.forEach(el => {
++      el.setAttribute('tabindex', '-1');
++    });
++  }, []);
++
++
++  // Ensure header anchor links with aria-hidden are not keyboard focusable
++  useEffect(() => {
++    const anchors = document.querySelectorAll('a.header-anchor[aria-hidden="true"]');
++    anchors.forEach((anchor) => {
++      anchor.setAttribute('tabindex', '-1');
++    });
++  }, [pathname]);
++
++  useEffect(() => {
++    // Add accessible labels to social links for screen readers
++    document.querySelectorAll('a.social-links').forEach((a) => {
++      const href = a.getAttribute('href') || '';
++      if (href.includes('github.com')) {
++        a.setAttribute('aria-label', 'GitHub');
++      } else if (href.includes('discord.gg')) {
++        a.setAttribute('aria-label', 'Discord');
++      } else if (href.includes('x.com')) {
++        a.setAttribute('aria-label', 'X');
++      }
++    });
++  }, []);
++
++
+   return (
+     <BaseLayout
+       afterNavTitle={<AfterNavTitle />}
